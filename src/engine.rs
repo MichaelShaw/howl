@@ -110,7 +110,13 @@ impl SoundEngine {
         let halt = match update {
             Preload(sounds) => {
                 for &(ref sound_name, gain) in &sounds {
-                    try!(context.load_sound(sound_name, gain));
+                    match context.load_sound(sound_name, gain) {
+                        Ok(_) => (),
+                        Err(err) => {
+                            println!("Sound Worker failed to preload {:?} err -> {:?}", sound_name, err);
+                            ()
+                        },
+                    }
                 }
                 false
             },
@@ -128,7 +134,13 @@ impl SoundEngine {
                     try!(context.set_listener(listener));
                 }
                 for sound_event in sounds {
-                    try!(context.play_event(sound_event, None));
+                    match context.play_event(sound_event.clone(), None) {
+                        Ok(_) => (),
+                        Err(err) => {
+                            println!("Sound Worker had problem playing sound_event {:?} err -> {:?}", sound_event, err);
+                            ()
+                        },
+                    }
                 }
                 
                 for (name, sound_event) in persistent_sounds {
