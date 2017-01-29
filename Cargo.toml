@@ -1,0 +1,16 @@
+[package]
+name = "howl"
+version = "0.1.0"
+authors = ["Michael Shaw <michaeljshaw@gmail.com>"]
+
+[dependencies]
+lewton = "0.4"
+alto = "1.0"
+ogg = "*"
+cgmath = "0.12"
+fnv = "1.0"
+time = "0.1"
+
+[[example]]
+name = "engine"
+path = "examples/engine/main.rs"
