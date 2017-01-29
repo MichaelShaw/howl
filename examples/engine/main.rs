@@ -22,7 +22,7 @@ fn main() {
     let listener = Listener::default();
 
     let sound_event = SoundEvent {
-        name: "telport".into(),
+        name: "teleport".into(),
         position: Vec3f::zero(),
         gain: 1.0,
         pitch: 1.5,
@@ -38,7 +38,7 @@ fn main() {
         loop_sound: false,
     };
 
-    worker.send(Preload(vec![("telepot".into(), 1.0), ("water".into(), 1.0)])).unwrap();
+    worker.send(Preload(vec![("teleport".into(), 1.0), ("water".into(), 1.0)])).unwrap();
 
     worker.send(Render { master_gain: 1.0, sounds:vec![sound_event.clone(), sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(1.0)], listener: listener }).unwrap();
 
