@@ -154,7 +154,6 @@ impl<'d> SoundContext<'d> {
         if let Some(l) = loan {
             if let Some(mut s) = self.sources.for_loan(l) {
                 // we have a loan, just apply the event
-                println!("we have loadn for {:?}", sound_event);
                 s.assign_event(sound_event, l.event_id).chain_err(||"Attempting to assign event to source")?;
                 return Ok(l)
             }
@@ -225,9 +224,7 @@ impl<'d> SoundContext<'d> {
 
     pub fn ensure_buffers_queued(&mut self) -> HowlResult<()> {
         for source in self.sources.streaming.iter_mut() {
-            println!("ok checking a streaming source");
             if source.current_binding.is_some() {
-                println!("source has a current binding");
                 match source.ensure_buffers_queued(self.context, self.stream_buffer_duration) {
                     Ok(_) => (),
                     Err(err) => {

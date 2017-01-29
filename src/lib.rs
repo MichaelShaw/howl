@@ -51,7 +51,8 @@ mod errors {
             NoFreeStaticSource
             NoFreeStreamingSource
             TooManyChannels
-            FileDoesntExist(whatever: ::std::path::PathBuf)
+            FileDoesntExist(path: ::std::path::PathBuf)
+            LoadError(path: ::std::path::PathBuf )
         }
 
         foreign_links {
