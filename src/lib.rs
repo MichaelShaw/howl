@@ -10,9 +10,6 @@ extern crate lewton;
 extern crate fnv;
 extern crate time;
 
-use std::path::PathBuf;
-use std::io;
-
 use fnv::FnvHasher;
 use std::collections::{HashMap as StdHashMap, HashSet as StdHashSet};
 use std::hash::BuildHasherDefault;
@@ -41,35 +38,27 @@ pub struct SoundEvent {
 
 pub type Listener = self::context::Listener;
 
-pub type HowlResult<T> = Result<T, HowlError>;
+pub type HowlResult<T> = errors::Result<T>;
+pub type HowlError = errors::Error;
 
-#[derive(Debug)]
-pub enum HowlError {
-	IO(io::Error),
-	FileDoesntExist(PathBuf),
-	Vorbis(lewton::VorbisError),
-    Alto(alto::AltoError),
-    TooManyChannels,
-    NoSound(String),
-    NoFreeSource(bool), // bool is for streaming
-}
+#[macro_use]
+extern crate error_chain;
 
+mod errors {
+    // Create the Error, ErrorKind, ResultExt, and Result types
+    error_chain! {
+        errors {
+            NoFreeStaticSource
+            NoFreeStreamingSource
+            TooManyChannels
+            FileDoesntExist(whatever: ::std::path::PathBuf)
+        }
 
-impl From<lewton::VorbisError> for HowlError {
-    fn from(val: lewton::VorbisError) -> HowlError {
-        HowlError::Vorbis(val)
-    }
-}
-
-impl From<io::Error> for HowlError {
-    fn from(val: io::Error) -> HowlError {
-        HowlError::IO(val)
-    }
-}
-
-impl From<alto::AltoError> for HowlError {
-    fn from(val: alto::AltoError) -> HowlError {
-        HowlError::Alto(val)
+        foreign_links {
+            IO(::std::io::Error);
+            Vorbis(::lewton::VorbisError);
+            Alto(::alto::AltoError);
+        }
     }
 }
 

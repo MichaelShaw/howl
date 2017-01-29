@@ -1,11 +1,12 @@
 use alto::{Context, StaticSource, StreamingSource, Buffer, SourceTrait, Mono, Stereo};
 
 use std::fs::File;
+use std::path::PathBuf;
 
 use lewton::inside_ogg::OggStreamReader;
 
 use super::*;
-
+use errors::*;
 
 // an index to a source + binding
 #[derive(Debug, Clone, Copy)]
@@ -15,7 +16,7 @@ pub struct SoundSourceLoan {
     pub streaming: bool,
 }
 
-#[derive(Debug)]
+
 pub struct SoundBinding {
     pub event_id: SoundEventId,
     pub sound_event: SoundEvent,
@@ -99,13 +100,13 @@ impl <'d> Sources<'d> {
     pub fn purge(&mut self) -> HowlResult<()> {
         for source in self.sources.iter_mut() {
             if source.current_binding.is_some() {
-                try!(source.inner.stop());
+                source.inner.stop()?;
                 source.current_binding = None;
             }
         }
         for source in self.streaming.iter_mut() {
             if source.current_binding.is_some() {
-                try!(source.inner.stop());
+                source.inner.stop()?;
                 source.current_binding = None;
             }
         }
@@ -121,7 +122,7 @@ impl <'d> Sources<'d> {
 
         for source in self.sources.iter_mut() {
             if source.current_binding.is_some() {
-                let state = try!(source.inner.state());
+                let state = source.inner.state()?;
                 match state {
                     Initial | Playing | Paused => (),
                     Stopped => {
@@ -135,7 +136,7 @@ impl <'d> Sources<'d> {
         }
         for source in self.streaming.iter_mut() {
             if source.current_binding.is_some() {
-                let state = try!(source.inner.state());
+                let state = source.inner.state()?;
                 match state {
                     Initial | Playing | Paused => (),
                     Stopped => {
@@ -161,8 +162,8 @@ pub struct SoundSource<'d> {
 impl<'d> SoundSource<'d> {
     // these perhaps should be implemented on their respective sources
     pub fn assign_event(&mut self, sound_event: SoundEvent, event_id: SoundEventId) -> HowlResult<()> {
-        try!(assign_event_details(&mut self.inner, &sound_event));
-        try!(self.inner.set_looping(sound_event.loop_sound));
+        assign_event_details(&mut self.inner, &sound_event).chain_err(||format!("Static assign event details for event {:?}", &sound_event))?;
+        self.inner.set_looping(sound_event.loop_sound).chain_err(||format!("Static assign looping for event {:?}", &sound_event))?;
         self.current_binding = Some(SoundBinding {
             event_id: event_id,
             sound_event: sound_event,
@@ -177,13 +178,15 @@ impl<'d> SoundSource<'d> {
 
 pub struct StreamingSoundSource<'d> {
     pub inner: StreamingSource<'d, 'd>, // make this private at some point?
-    pub stream_reader : Option<OggStreamReader<File>>,
+    pub stream_reader : Option<(OggStreamReader<File>, PathBuf)>,
     pub current_binding: Option<SoundBinding>,
 }
 
+const BUFFERS_TO_QUEUE: usize = 5;
+
 impl<'d> StreamingSoundSource<'d> {
     pub fn assign_event(&mut self, sound_event: SoundEvent, event_id: SoundEventId) -> HowlResult<()> {
-        try!(assign_event_details(&mut self.inner, &sound_event));
+        assign_event_details(&mut self.inner, &sound_event).chain_err(||format!("Streaming assign event details for event {:?}", &sound_event))?;
         self.current_binding = Some(SoundBinding {
             event_id: event_id,
             sound_event: sound_event,
@@ -191,70 +194,63 @@ impl<'d> StreamingSoundSource<'d> {
         Ok(())
     }
 
-    pub fn ensure_buffers_current(&mut self, context: &'d Context<'d>) -> HowlResult<()> {
-        'main: loop {
-            let queued = try!(self.inner.buffers_queued());
-            let processed = try!(self.inner.buffers_processed());
-            println!("queued count {:?}", queued);
-            if queued < 5 || processed > 0 {
-                println!("not enough buffers!");
-                let cleanup : bool = if let Some(ref mut reader) = self.stream_reader {
+    pub fn ensure_buffers_queued(&mut self, context: &'d Context<'d>, buffer_duration: f32) -> HowlResult<()> {
+        loop {
+            let queued = self.inner.buffers_queued()?;
+            let processed = self.inner.buffers_processed()?;
+            // println!("queued count {:?}", queued);
+            if queued < BUFFERS_TO_QUEUE as i32 || processed > 0 {
+                // println!("not enough buffers!");
+                let eof_cleanup : bool = if let Some((ref mut reader, ref path)) = self.stream_reader {
                     // 1 for 1 is retarded
                     let channels = reader.ident_hdr.audio_channels;
                     let sample_rate = reader.ident_hdr.audio_sample_rate;
                     let mut data : Vec<i16> = Vec::new();
-                    let eof : bool = match drain(reader, &mut data, 50_000) {
-                        Ok(bytes_read) => bytes_read < 50_000,
-                        Err(err) => true,
-                    };
+
+                    // per pack
+                    let samples_to_drain : usize = (sample_rate as f32 * buffer_duration / (BUFFERS_TO_QUEUE as f32)) as usize;
+
+                    let samples_read = drain(reader, &mut data, samples_to_drain).chain_err(||format!("Attemping to read packets from {:?}", path))?;
+                    let eof = samples_read < samples_to_drain;
 
                     if data.len() > 0 {
-                        println!("we read a packet :D");
-                        let mut buffer : Buffer = if try!(self.inner.buffers_processed()) > 0 {
-                            println!("dequeueing buffer");
-                            try!(self.inner.unqueue_buffer())
+                        let mut buffer : Buffer = if self.inner.buffers_processed()? > 0 {
+                            self.inner.unqueue_buffer()?
                         } else {
-                            println!("new buffer");
-                            try!(context.new_buffer())
+                            context.new_buffer()?
                         };
 
-                           
-
-                        let duration = (data.len() as f32) / (sample_rate as f32);
-                        println!("duration of packet -> {:?}, data length {:?}", duration, data.len());
+                        // let duration = (data.len() as f32) / (sample_rate as f32);
                         
-
                         if channels == 1 {
-                            try!(buffer.set_data::<Mono<i16>, _>(data, sample_rate as i32));
+                            buffer.set_data::<Mono<i16>, _>(data, sample_rate as i32)?;
                         } else if channels == 2 {
-                            try!(buffer.set_data::<Stereo<i16>, _>(data, sample_rate as i32));
+                            buffer.set_data::<Stereo<i16>, _>(data, sample_rate as i32)?;
                         } else {
-                            return Err(HowlError::TooManyChannels);
+                            return Err(ErrorKind::TooManyChannels.into());
                         }
 
                         match self.inner.queue_buffer(buffer) {
-                            Ok(()) => {
-                                println!("we queued a buffer");
-                                eof
-                            },
+                            Ok(()) => (),
                             Err((error, _)) => {
                                 println!("no queued buffer fml");   
-                                return Err(HowlError::Alto(error))
+                                return Err(error.into())
                             },
                         }
-                    } else {
-                        true
-                    }
+                      
+                    } 
+
+                    eof
                 } else {
-                    println!("no stream reader to start with ...");
-                    break 'main;
+                    break;
                 };
-                if cleanup {
-                    println!("Destroying stream reader");
+
+                if eof_cleanup {
                     self.stream_reader = None;
+                    break;
                 }
             } else {
-                break 'main;
+                break;
             }
         }
         Ok(())
@@ -273,7 +269,7 @@ fn drain(reader: &mut OggStreamReader<File>, data: &mut Vec<i16>, samples: usize
 
     let mut samples_read : usize = 0;
     while data.len() < samples {
-        if let Some(packet) = try!(reader.read_dec_packet_itl()) {
+        if let Some(packet) = reader.read_dec_packet_itl()? {
             samples_read += packet.len();
             data.extend(&packet);
         } else {
@@ -285,9 +281,9 @@ fn drain(reader: &mut OggStreamReader<File>, data: &mut Vec<i16>, samples: usize
 }
 
 pub fn assign_event_details<'d: 'c, 'c, ST : SourceTrait<'d,'c>>(source: &mut ST, sound_event:&SoundEvent) -> HowlResult<()> {
-    try!(source.set_pitch(sound_event.pitch));
-    try!(source.set_position(sound_event.position));
-    try!(source.set_gain(sound_event.gain));
+    source.set_pitch(sound_event.pitch)?;
+    source.set_position(sound_event.position)?;
+    source.set_gain(sound_event.gain)?;
     Ok(())
 }
 
@@ -302,10 +298,10 @@ impl<'d: 'a, 'a> CombinedSource<'d, 'a> {
         use self::CombinedSource::*;
         match self {
             &mut Static(ref mut source) => {
-                try!(source.assign_event(event, event_id));
+                source.assign_event(event, event_id)?;
             },
             &mut Streaming(ref mut source) => {
-                try!(source.assign_event(event, event_id));
+                source.assign_event(event, event_id)?;
             },
         }
         Ok(())
@@ -315,16 +311,16 @@ impl<'d: 'a, 'a> CombinedSource<'d, 'a> {
         use self::CombinedSource::*;
         match self {
             &mut Static(ref mut source) => {
-                try!(source.inner.stop());
-                try!(source.inner.clear_buffer());
+                source.inner.stop()?;
+                source.inner.clear_buffer()?;
                 source.current_binding = None;
             },
             &mut Streaming(ref mut source) => {
-                try!(source.inner.stop());
+                source.inner.stop()?;
                 source.stream_reader = None;
                 source.current_binding = None;
-                while try!(source.inner.buffers_processed()) > 0 {
-                    try!(source.inner.unqueue_buffer());
+                while source.inner.buffers_processed()? > 0 {
+                    source.inner.unqueue_buffer()?;
                 }
             },
         }

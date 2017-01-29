@@ -9,7 +9,7 @@ extern crate cgmath;
 use alto::Alto;
 
 use howl::{Listener, SoundEvent, Vec3f, HashMap};
-use howl::engine::{SoundEngine};
+use howl::engine::SoundWorker;
 use howl::engine::SoundEngineUpdate::*;
 use cgmath::Zero;
 
@@ -19,12 +19,7 @@ const OPENAL_PATH: &'static str = "./native/windows/OpenAL64.dll";
 const OPENAL_PATH: &'static str = "./native/mac/openal.dylib";
 
 fn main() {
-    let alto = Alto::load(OPENAL_PATH).unwrap();
-    let dev = alto.open(None).unwrap();
-    let ctx = dev.new_context(None).unwrap();
-    let mut cb = howl::context::create_sound_context(&ctx, "examples/engine/resources", "ogg", 1_000_000);
-
-    cb.create(32, 4).unwrap();
+    let worker = SoundWorker::create(OPENAL_PATH.into(), "examples/engine/resources".into(), "ogg".into(), 1_000_000, 5.0);
 
     let listener = Listener::default();
 
@@ -45,19 +40,21 @@ fn main() {
         loop_sound: false,
     };
 
-    let mut engine = SoundEngine::new();
+    worker.send(Preload(vec![("teleport".into(), 1.0), ("water".into(), 1.0)])).unwrap();
 
-    engine.process(&mut cb, Preload(vec![("teleport".into(), 1.0), ("water".into(), 1.0)])).unwrap();
-
-    engine.process(&mut cb, Render { master_gain: 1.0, sounds:vec![sound_event, sound_event_b], persistent_sounds: hashmap!["music".into() => find_me_sound(1.0)], listener: listener }).unwrap();
+    worker.send(Render { master_gain: 1.0, sounds:vec![sound_event, sound_event_b], persistent_sounds: hashmap!["music".into() => find_me_sound(1.0)], listener: listener }).unwrap();
 
     std::thread::sleep(std::time::Duration::new(3, 0));
 
-    engine.process(&mut cb, Render { master_gain: 1.0, sounds:Vec::new(), persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
+    worker.send(Render { master_gain: 1.0, sounds:Vec::new(), persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
 
     std::thread::sleep(std::time::Duration::new(3, 0));
-    
-    engine.process(&mut cb, Clear).unwrap();
+
+    worker.send(Render { master_gain: 1.0, sounds:Vec::new(), persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
+
+    std::thread::sleep(std::time::Duration::new(3, 0));    
+
+    worker.shutdown_and_wait();
 
     std::thread::sleep(std::time::Duration::new(1, 0));
 }

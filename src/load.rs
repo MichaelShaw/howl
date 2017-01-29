@@ -6,6 +6,7 @@ use std::path::{Path};
 use std::io;
 
 use ogg;
+use errors::*;
 
 use HowlResult;
 
@@ -22,10 +23,8 @@ impl Sound {
     }
 }
 
-// forked load based on file size?? 
-
 pub fn file_size<P: AsRef<Path>>(path: P) -> io::Result<u64> {
-    let meta_data = try!(fs::metadata(path));
+    let meta_data = fs::metadata(path)?;
     Ok(meta_data.len())
 }
 
@@ -34,42 +33,38 @@ pub enum LoadedSound {
     Streaming(OggStreamReader<File>),
 }
 
-pub fn load_combined<P: AsRef<Path>>(path: P, streaming_size: u64) -> HowlResult<LoadedSound> {
-    let size = try!(file_size(&path));
+pub fn load_combined(path: &Path, streaming_size: u64) -> HowlResult<LoadedSound> {
+    let size = file_size(path).chain_err(||format!("Checking size for {:?}", path))?;
     if size > streaming_size {
-        let stream = try!(load_ogg_stream(path));
+        let stream = load_ogg_stream(path)?;
         Ok(LoadedSound::Streaming(stream))
     } else {
-        let sound = try!(load_ogg(path));
+        let sound = load_ogg(path)?;
         Ok(LoadedSound::Static(sound))
     }
 }
 
-pub fn load_ogg_stream<P: AsRef<Path>>(path: P) -> HowlResult<OggStreamReader<File>> {
-    let f = try!(File::open(path));
+pub fn load_ogg_stream(path: &Path) -> HowlResult<OggStreamReader<File>> {
+    let f = File::open(path).chain_err(|| format!("Attempting to open path {:?}", path))?;
     let packet_reader = ogg::PacketReader::new(f);
-	let srr = try!(OggStreamReader::new(packet_reader));
+	let srr = OggStreamReader::new(packet_reader).chain_err(|| format!("Attempting to open packet reader for {:?}", path))?;
     Ok(srr)
 }
 
-pub fn load_ogg<P: AsRef<Path>>(path: P) -> HowlResult<Sound> {
-    let f = try!(File::open(path));
 
-	// Prepare the reading
+pub fn load_ogg(path: &Path) -> HowlResult<Sound> {
+    let f = File::open(path).chain_err(|| format!("Attempting to open path {:?}", path))?;
+
     let packet_reader = ogg::PacketReader::new(f);
-	let mut srr = try!(OggStreamReader::new(packet_reader));
+	let mut srr = OggStreamReader::new(packet_reader).chain_err(|| format!("Attempting to open packet reader for {:?}", path))?;
     
     if srr.ident_hdr.audio_channels > 2 {
-		// the openal crate can't process these many channels directly
-        // std::vec::Vec<i16>
-		println!("Stream error: {} channels are too many!", srr.ident_hdr.audio_channels);
+        let err: Error = ErrorKind::TooManyChannels.into();
+        return Err(err).chain_err(|| format!("Attempting to open packet reader for {:?}", path));
 	}
 
-    // let mut len_play = 0.0;
     let mut data : Vec<i16> = Vec::new();
-    while let Some(pck_samples) = try!(srr.read_dec_packet_itl()) {
-        // println!("I got some shit {:?}", pck_samples);
-        // len_play += pck_samples.len() as f32 / srr.ident_hdr.audio_sample_rate as f32;
+    while let Some(pck_samples) = srr.read_dec_packet_itl().chain_err(||format!("Attempting to read ogg packet for {:?}", path))? {
         data.extend(pck_samples.iter());
     }
     

@@ -10,6 +10,7 @@ ogg = "*"
 cgmath = "0.12"
 fnv = "1.0"
 time = "0.1"
+error-chain = "0.8"
 
 [[example]]
 name = "engine"
