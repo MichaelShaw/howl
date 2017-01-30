@@ -2,6 +2,7 @@ pub mod engine;
 pub mod load;
 pub mod context;
 pub mod source;
+pub mod worker;
 
 extern crate cgmath;
 extern crate alto;
@@ -9,6 +10,7 @@ extern crate ogg;
 extern crate lewton;
 extern crate fnv;
 extern crate time;
+extern crate notify;
 
 use fnv::FnvHasher;
 use std::collections::{HashMap as StdHashMap, HashSet as StdHashSet};

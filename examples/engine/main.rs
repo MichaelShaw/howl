@@ -7,7 +7,7 @@ extern crate alto;
 extern crate cgmath;
 
 use howl::{Listener, SoundEvent, Vec3f, HashMap};
-use howl::engine::SoundWorker;
+use howl::worker::SoundWorker;
 use howl::engine::SoundEngineUpdate::*;
 use cgmath::Zero;
 
@@ -46,9 +46,11 @@ fn main() {
 
     worker.send(Render { master_gain: 1.0, sounds:vec![sound_event.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
 
-    std::thread::sleep(std::time::Duration::new(3, 0));
+    for i in 0..10 {
+        std::thread::sleep(std::time::Duration::new(3, 0));
 
-    worker.send(Render { master_gain: 1.0, sounds:vec![sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
+        worker.send(Render { master_gain: 1.0, sounds:vec![sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();    
+    }
 
     std::thread::sleep(std::time::Duration::new(3, 0));    
 

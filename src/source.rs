@@ -99,22 +99,16 @@ impl <'d> Sources<'d> {
 
     pub fn purge(&mut self) -> HowlResult<()> {
         for source in self.sources.iter_mut() {
-            if source.current_binding.is_some() {
-                source.inner.stop()?;
-                source.current_binding = None;
-            }
+            source.clean()?;
         }
         for source in self.streaming.iter_mut() {
-            if source.current_binding.is_some() {
-                source.inner.stop()?;
-                source.current_binding = None;
-            }
+            source.clean()?;
         }
         Ok(())
     }
     
     // just updates book keeping of sources that have stopped since we checked (so we can throw away the binding)
-    pub fn clean(&mut self) -> HowlResult<(u32, u32)> {
+    pub fn check_bindings(&mut self) -> HowlResult<(u32, u32)> {
         use alto::SourceState::*;
 
         let mut available_sources = 0;
@@ -171,8 +165,11 @@ impl<'d> SoundSource<'d> {
         Ok(())
     }
 
-    pub fn clean(&mut self) {
+    pub fn clean(&mut self) -> HowlResult<()> {
         self.current_binding = None;
+        self.inner.stop()?;
+        self.inner.clear_buffer()?;
+        Ok(())
     }
 }
 
@@ -259,7 +256,10 @@ impl<'d> StreamingSoundSource<'d> {
     pub fn clean(&mut self) -> HowlResult<()> {
         self.stream_reader = None;
         self.current_binding = None;
-        // drain some buffers as well
+        self.inner.stop()?;
+        while self.inner.buffers_queued()? > 0 {
+            self.inner.unqueue_buffer()?;
+        }
         Ok(())
     }
 }
