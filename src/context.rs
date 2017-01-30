@@ -143,7 +143,7 @@ impl<'d> SoundContext<'d> {
                 source.inner.set_buffer(buffer.inner.clone())?;
                 source.assign_event(sound_event, loan.event_id)?;
                 source.inner.play().map_err(SoundEventError::SoundProviderError)?;
-     
+
                 Ok(loan)
             } else {
                 Err(SoundEventError::NoFreeStaticSource)
