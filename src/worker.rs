@@ -67,19 +67,20 @@ impl SoundWorker {
 	                			}
 	                		}
 	                	}
+
 	                	if purge {
 	                		// at some point we could do smarter purging
 	                		println!("sound worker noticed file system changes, purging buffers");
-	        				engine.process(&mut cb, SoundEngineUpdate::Clear).unwrap();		
+	        				if engine.process(&mut cb, SoundEngineUpdate::Clear).is_err() {
+                                break;
+                            }
 	                	}
 
-
                         match engine.process(&mut cb, event) {
-                            Ok(halt) => {
-                                if halt {
-                                    println!("Sound engine shutting down");
-                                    break;
-                                }
+                            Ok(true) => (),
+                            Ok(false) => {
+                                println!("Sound engine shutting down");
+                                break;
                             },
                             Err(err) => {
                                 println!("Sound engine received unrecoverable error {:?} and is shutting down", err);
@@ -88,7 +89,7 @@ impl SoundWorker {
                         }
                     },
                     Err(recv_error) => {
-                        println!("Sound worker received error {:?}", recv_error);
+                        println!("Sound worker received error when reading from channel {:?}", recv_error);
                         break;
                     },
                 }

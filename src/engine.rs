@@ -1,10 +1,9 @@
-use {HashMap, HowlResult};
-
 use time;
 
-use super::{DistanceModel, SoundEvent, Gain, SoundName};
-use super::context::{Listener, SoundContext};
+use {Listener, DistanceModel, SoundEvent, Gain, SoundName, HashMap, SoundProviderResult};
+use super::context::{SoundContext};
 use super::source::SoundSourceLoan;
+use super::errors::*;
 
 #[derive(Debug, Clone)]
 pub enum SoundEngineUpdate {
@@ -32,9 +31,9 @@ impl SoundEngine {
         }
     }
 
-    pub fn process(&mut self, context: &mut SoundContext, update:SoundEngineUpdate) -> HowlResult<bool> {
+    pub fn process(&mut self, context: &mut SoundContext, update:SoundEngineUpdate) -> SoundProviderResult<bool> { // book is over clean shutdown
         use self::SoundEngineUpdate::*;
-        let halt = match update {
+        let should_continue = match update {
             Preload(sounds) => {
                 for &(ref sound_name, gain) in &sounds {
                     match context.load_sound(sound_name, gain) {
@@ -45,49 +44,57 @@ impl SoundEngine {
                         },
                     }
                 }
-                false
+                true
             },
             DistanceModel(model) => {
-                try!(context.set_distace_model(model));
-                false
+                context.set_distace_model(model)?;
+                true
             },
             Render { master_gain, sounds, persistent_sounds, listener } => {
                 try!(context.sources.check_bindings());
-                try!(context.ensure_buffers_queued());
+                match context.ensure_buffers_queued() {
+                    Ok(_) => (),
+                    Err(PreloadError::LoadError(le)) => println!("Sound worker received load error while ensuring buffers are queued {:?}", le),
+                    Err(PreloadError::SoundProviderError(sp)) => return Err(sp), 
+                }
                 if context.master_gain != master_gain {
                     try!(context.set_gain(master_gain));
                 }
                 if context.listener != listener {
                     try!(context.set_listener(listener));
                 }
+
                 for sound_event in sounds {
                     match context.play_event(sound_event.clone(), None) {
                         Ok(_) => (),
-                        Err(err) => {
-                            println!("Sound Worker had problem playing sound_event {:?} err -> {:?}", sound_event, err);
-                            ()
-                        },
+                        Err(SoundEventError::SoundProviderError(sp)) => return Err(sp),
+                        Err(err) => println!("Sound Worker had problem playing sound_event {:?} err -> {:?}", sound_event, err),
                     }
                 }
                 
                 for (name, sound_event) in persistent_sounds {
                     let old_loan = self.loans.remove(&name);
-                    let new_loan = try!(context.play_event(sound_event, old_loan));
-                    self.loans.insert(name, new_loan);
+                    match context.play_event(sound_event.clone(), old_loan) {
+                        Ok(new_loan) => {
+                            self.loans.insert(name, new_loan);        
+                        },
+                        Err(SoundEventError::SoundProviderError(sp)) => return Err(sp),
+                        Err(err) => println!("Sound Worker had problem playing sound_event {:?} err -> {:?}", sound_event, err),
+                    }
+                    
                 }
 
-                false  
+                true  
             },
             Clear => {
                 try!(context.purge());
-                false
+                true
             },
             Stop => {
                 try!(context.purge());
-                true
+                false
             }
         };
-        Ok(halt)
-        
+        Ok(should_continue)
     }
 }

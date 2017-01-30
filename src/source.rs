@@ -3,6 +3,7 @@ use alto::{Context, StaticSource, StreamingSource, Buffer, SourceTrait, Mono, St
 use std::fs::File;
 use std::path::PathBuf;
 
+use lewton;
 use lewton::inside_ogg::OggStreamReader;
 
 use super::*;
@@ -97,7 +98,7 @@ impl <'d> Sources<'d> {
         }
     }
 
-    pub fn purge(&mut self) -> HowlResult<()> {
+    pub fn purge(&mut self) -> SoundProviderResult<()> {
         for source in self.sources.iter_mut() {
             source.clean()?;
         }
@@ -108,7 +109,7 @@ impl <'d> Sources<'d> {
     }
     
     // just updates book keeping of sources that have stopped since we checked (so we can throw away the binding)
-    pub fn check_bindings(&mut self) -> HowlResult<(u32, u32)> {
+    pub fn check_bindings(&mut self) -> SoundProviderResult<(u32, u32)> {
         use alto::SourceState::*;
 
         let mut available_sources = 0;
@@ -155,9 +156,9 @@ pub struct SoundSource<'d> {
 
 impl<'d> SoundSource<'d> {
     // these perhaps should be implemented on their respective sources
-    pub fn assign_event(&mut self, sound_event: SoundEvent, event_id: SoundEventId) -> HowlResult<()> {
-        assign_event_details(&mut self.inner, &sound_event).chain_err(||format!("Static assign event details for event {:?}", &sound_event))?;
-        self.inner.set_looping(sound_event.loop_sound).chain_err(||format!("Static assign looping for event {:?}", &sound_event))?;
+    pub fn assign_event(&mut self, sound_event: SoundEvent, event_id: SoundEventId) -> SoundProviderResult<()> {
+        assign_event_details(&mut self.inner, &sound_event)?;
+        self.inner.set_looping(sound_event.loop_sound)?;
         self.current_binding = Some(SoundBinding {
             event_id: event_id,
             sound_event: sound_event,
@@ -165,7 +166,7 @@ impl<'d> SoundSource<'d> {
         Ok(())
     }
 
-    pub fn clean(&mut self) -> HowlResult<()> {
+    pub fn clean(&mut self) -> SoundProviderResult<()> {
         self.current_binding = None;
         self.inner.stop()?;
         self.inner.clear_buffer()?;
@@ -182,8 +183,8 @@ pub struct StreamingSoundSource<'d> {
 const BUFFERS_TO_QUEUE: usize = 5;
 
 impl<'d> StreamingSoundSource<'d> {
-    pub fn assign_event(&mut self, sound_event: SoundEvent, event_id: SoundEventId) -> HowlResult<()> {
-        assign_event_details(&mut self.inner, &sound_event).chain_err(||format!("Streaming assign event details for event {:?}", &sound_event))?;
+    pub fn assign_event(&mut self, sound_event: SoundEvent, event_id: SoundEventId) -> SoundProviderResult<()> {
+        assign_event_details(&mut self.inner, &sound_event)?;
         self.current_binding = Some(SoundBinding {
             event_id: event_id,
             sound_event: sound_event,
@@ -191,7 +192,7 @@ impl<'d> StreamingSoundSource<'d> {
         Ok(())
     }
 
-    pub fn ensure_buffers_queued(&mut self, context: &'d Context<'d>, buffer_duration: f32) -> HowlResult<()> {
+    pub fn ensure_buffers_queued(&mut self, context: &'d Context<'d>, buffer_duration: f32) -> PreloadResult<()> {
         loop {
             let queued = self.inner.buffers_queued()?;
             let processed = self.inner.buffers_processed()?;
@@ -207,7 +208,7 @@ impl<'d> StreamingSoundSource<'d> {
                     // per pack
                     let samples_to_drain : usize = (sample_rate as f32 * buffer_duration / (BUFFERS_TO_QUEUE as f32)) as usize;
 
-                    let samples_read = drain(reader, &mut data, samples_to_drain).chain_err(||format!("Attemping to read packets from {:?}", path))?;
+                    let samples_read = drain(reader, &mut data, samples_to_drain).map_err(|oe| LoadError { path: path.clone(), reason: LoadErrorReason::ReadOggError(oe)})?;
                     let eof = samples_read < samples_to_drain;
 
                     if data.len() > 0 {
@@ -224,7 +225,7 @@ impl<'d> StreamingSoundSource<'d> {
                         } else if channels == 2 {
                             buffer.set_data::<Stereo<i16>, _>(data, sample_rate as i32)?;
                         } else {
-                            return Err(ErrorKind::TooManyChannels.into());
+                            return Err(PreloadError::LoadError(LoadError { path: path.clone(), reason: LoadErrorReason::TooManyChannels }));
                         }
 
                         match self.inner.queue_buffer(buffer) {
@@ -253,7 +254,7 @@ impl<'d> StreamingSoundSource<'d> {
         Ok(())
     }
 
-    pub fn clean(&mut self) -> HowlResult<()> {
+    pub fn clean(&mut self) -> SoundProviderResult<()> {
         self.stream_reader = None;
         self.current_binding = None;
         self.inner.stop()?;
@@ -264,7 +265,7 @@ impl<'d> StreamingSoundSource<'d> {
     }
 }
 
-fn drain(reader: &mut OggStreamReader<File>, data: &mut Vec<i16>, samples: usize) -> HowlResult<usize> {
+fn drain(reader: &mut OggStreamReader<File>, data: &mut Vec<i16>, samples: usize) -> Result<usize, lewton::VorbisError> {
     use std::iter::Extend;
 
     let mut samples_read : usize = 0;
@@ -280,7 +281,7 @@ fn drain(reader: &mut OggStreamReader<File>, data: &mut Vec<i16>, samples: usize
     Ok(samples_read)
 }
 
-pub fn assign_event_details<'d: 'c, 'c, ST : SourceTrait<'d,'c>>(source: &mut ST, sound_event:&SoundEvent) -> HowlResult<()> {
+pub fn assign_event_details<'d: 'c, 'c, ST : SourceTrait<'d,'c>>(source: &mut ST, sound_event:&SoundEvent) -> SoundProviderResult<()> {
     source.set_pitch(sound_event.pitch)?;
     source.set_position(sound_event.position)?;
     source.set_gain(sound_event.gain)?;
@@ -294,7 +295,7 @@ pub enum CombinedSource<'d: 'a, 'a> {
 }
 
 impl<'d: 'a, 'a> CombinedSource<'d, 'a> {
-    pub fn assign_event(&mut self, event:SoundEvent, event_id: SoundEventId) -> HowlResult<()> {
+    pub fn assign_event(&mut self, event:SoundEvent, event_id: SoundEventId) -> SoundProviderResult<()> {
         use self::CombinedSource::*;
         match self {
             &mut Static(ref mut source) => {
@@ -307,7 +308,7 @@ impl<'d: 'a, 'a> CombinedSource<'d, 'a> {
         Ok(())
     }
 
-    pub fn stop(&mut self) -> HowlResult<()> {
+    pub fn stop(&mut self) -> SoundProviderResult<()> {
         use self::CombinedSource::*;
         match self {
             &mut Static(ref mut source) => {

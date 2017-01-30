@@ -5,16 +5,14 @@ use alto::{Mono, Stereo};
 use std::sync::Arc;
 use std::path::{PathBuf};
 
-use super::{Gain, SoundEvent, SoundName, DistanceModel};
 use super::load::{load_combined, LoadedSound, load_ogg};
 use super::source::{Sources, SoundSource, StreamingSoundSource, SoundSourceLoan};
 
-use Vec3f;
-use HashMap;
-use HowlResult;
+use {HashMap, Gain, DistanceModel, SoundName, SoundEvent};
+use {SoundProviderResult, PreloadResult, SoundEventResult};
+use super::errors::*;
+use super::Listener;
 
-use cgmath::Zero;
-use errors::*;
 
 pub struct SoundContext<'d> {
     pub context: &'d Context<'d>,
@@ -33,27 +31,6 @@ pub struct SoundBuffer<'d> {
     pub inner : Arc<Buffer<'d, 'd>>,
     pub gain: Gain,
     pub duration: f32, // we could track last used .... could be interesting if nothing else
-}
-
-
-
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Listener {
-    pub position: Vec3f,
-    pub velocity: Vec3f,
-    pub orientation_up: Vec3f,
-    pub orientation_forward: Vec3f,
-}
-
-impl Listener {
-    pub fn default() -> Listener {
-        Listener {
-            position: Vec3f::zero(),
-            velocity: Vec3f::zero(),
-            orientation_up: Vec3f::new(0.0, 1.0, 0.0),
-            orientation_forward: Vec3f::new(0.0, 0.0, -1.0),
-        }
-    }
 }
 
 pub fn create_sound_context<'d>(context: &'d Context<'d>, path:&str, extension: &str, stream_above_file_size: u64, stream_buffer_duration: f32) -> SoundContext<'d> {
@@ -77,37 +54,37 @@ pub fn create_sound_context<'d>(context: &'d Context<'d>, path:&str, extension: 
 }
 
 impl<'d> SoundContext<'d> {
-    pub fn set_gain(&mut self, gain: Gain) -> HowlResult<()> {
-        self.context.set_gain(gain).chain_err(||"SoundContext attempting to set gain")?;
+    pub fn set_gain(&mut self, gain: Gain) -> SoundProviderResult<()> {
+        self.context.set_gain(gain)?;
         self.master_gain = gain;
 
         Ok(())
     }
 
-    pub fn create(&mut self, static_count: usize, streaming_count: usize) -> HowlResult<()> {
-        for n in 0..static_count {
-            let source = self.context.new_static_source().chain_err(||format!("Attempting to create {:?} static source", n))?;
+    pub fn create(&mut self, static_count: usize, streaming_count: usize) -> SoundProviderResult<()> {
+        for _ in 0..static_count {
+            let source = self.context.new_static_source()?;
             self.sources.sources.push(SoundSource { inner: source, current_binding: None});
         }
-        for n in 0..streaming_count {
-            let source = self.context.new_streaming_source().chain_err(||format!("Attempting to create {:?} streaming source", n))?;
+        for _ in 0..streaming_count {
+            let source = self.context.new_streaming_source()?;
             self.sources.streaming.push(StreamingSoundSource { inner: source, stream_reader: None, current_binding: None });
         }
         Ok(())
     }
 
-    pub fn set_listener(&mut self, listener: Listener) -> HowlResult<()> {
-        self.context.set_position(listener.position).chain_err(||"Attempting to set position")?;
-        self.context.set_velocity(listener.velocity).chain_err(||"Attempting to set velocity")?;
-        self.context.set_orientation::<[f32; 3]>((listener.orientation_forward.into(), listener.orientation_up.into())).chain_err(||"Attempting to set velocity")?;
+    pub fn set_listener(&mut self, listener: Listener) -> SoundProviderResult<()> {
+        self.context.set_position(listener.position)?;
+        self.context.set_velocity(listener.velocity)?;
+        self.context.set_orientation::<[f32; 3]>((listener.orientation_forward.into(), listener.orientation_up.into()))?;
 
         self.listener = listener;
         
         Ok(())
     }
 
-     pub fn purge(&mut self) -> HowlResult<()> {
-        self.sources.purge().chain_err(|| "Context Purging sources")?;
+     pub fn purge(&mut self) -> SoundProviderResult<()> {
+        self.sources.purge()?;
         self.buffers.clear();
         Ok(())
     }
@@ -116,24 +93,23 @@ impl<'d> SoundContext<'d> {
         PathBuf::from(format!("{}/{}.{}", &self.path, name, &self.extension))
     }
 
-
-    pub fn set_distace_model(&mut self, distance_model: DistanceModel) -> HowlResult<()> {
-        self.context.set_distance_model(distance_model).chain_err(||"Context setting distance model")?;
+    pub fn set_distace_model(&mut self, distance_model: DistanceModel) -> SoundProviderResult<()> {
+        self.context.set_distance_model(distance_model)?;
         self.distance_model = distance_model;
         Ok(())
     }
 
     // just convenience
-    pub fn stop(&mut self, loan:SoundSourceLoan) -> HowlResult<()> {
+    pub fn stop(&mut self, loan:SoundSourceLoan) -> SoundProviderResult<()> {
         if let Some(ref mut source) = self.sources.for_loan(loan) {
-            source.stop().chain_err(||format!("Attempting to stop source for {:?}", loan))?;
+            source.stop()?;
         }
         Ok(())
     }
 
-    pub fn load_sound(&mut self, sound_name: &str, gain: Gain) -> HowlResult<()> {
+    pub fn load_sound(&mut self, sound_name: &str, gain: Gain) -> PreloadResult<()> {
         let path = self.full_path(sound_name);
-        let sound = load_ogg(&path).chain_err(|| format!("attempting to load path {:?}", path))?;
+        let sound = load_ogg(&path)?;
         let mut buffer = try!(self.context.new_buffer());
         let duration = sound.duration();
         if sound.channels == 1 {
@@ -141,7 +117,7 @@ impl<'d> SoundContext<'d> {
         } else if sound.channels == 2 {
             try!(buffer.set_data::<Stereo<i16>, _>(sound.data, sound.sample_rate as i32));
         } else {
-            bail!(ErrorKind::TooManyChannels);
+            // bail!(ErrorKind::TooManyChannels);
         }
 
         let arc_buffer = Arc::new(buffer);
@@ -150,11 +126,11 @@ impl<'d> SoundContext<'d> {
         Ok(())
     }
 
-    pub fn play_event(&mut self, sound_event: SoundEvent, loan: Option<SoundSourceLoan>) -> HowlResult<SoundSourceLoan> {
+    pub fn play_event(&mut self, sound_event: SoundEvent, loan: Option<SoundSourceLoan>) -> SoundEventResult<SoundSourceLoan> {
         if let Some(l) = loan {
             if let Some(mut s) = self.sources.for_loan(l) {
                 // we have a loan, just apply the event
-                s.assign_event(sound_event, l.event_id).chain_err(||"Attempting to assign event to source")?;
+                s.assign_event(sound_event, l.event_id)?;
                 return Ok(l)
             }
         } 
@@ -166,11 +142,11 @@ impl<'d> SoundContext<'d> {
                 // and there's a free source
                 source.inner.set_buffer(buffer.inner.clone())?;
                 source.assign_event(sound_event, loan.event_id)?;
-                source.inner.play().chain_err(||"Playing source")?;
+                source.inner.play().map_err(SoundEventError::SoundProviderError)?;
      
                 Ok(loan)
             } else {
-                Err(ErrorKind::NoFreeStaticSource.into())
+                Err(SoundEventError::NoFreeStaticSource)
             }
         }
 
@@ -188,7 +164,7 @@ impl<'d> SoundContext<'d> {
                 } else if sound.channels == 2 {
                     try!(buffer.set_data::<Stereo<i16>, _>(sound.data, sound.sample_rate as i32));
                 } else {
-                    bail!(ErrorKind::TooManyChannels);
+                    // bail!(ErrorKind::TooManyChannels);
                 }
 
                 let arc_buffer = Arc::new(buffer);
@@ -201,7 +177,7 @@ impl<'d> SoundContext<'d> {
                     try!(source.inner.play());
                     Ok(loan)
                 } else {
-                    Err(ErrorKind::NoFreeStaticSource.into())
+                    Err(SoundEventError::NoFreeStaticSource)
                 };
                 self.buffers.insert(sound_name, SoundBuffer{ inner: arc_buffer, gain: 1.0, duration: duration });
                 result
@@ -216,13 +192,13 @@ impl<'d> SoundContext<'d> {
 
                     Ok(loan)
                 } else {
-                    Err(ErrorKind::NoFreeStreamingSource.into())
+                    Err(SoundEventError::NoFreeStreamingSource)
                 };
             },
         }
     }
 
-    pub fn ensure_buffers_queued(&mut self) -> HowlResult<()> {
+    pub fn ensure_buffers_queued(&mut self) -> PreloadResult<()> {
         for source in self.sources.streaming.iter_mut() {
             if source.current_binding.is_some() {
                 match source.ensure_buffers_queued(self.context, self.stream_buffer_duration) {

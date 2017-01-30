@@ -15,6 +15,7 @@ extern crate notify;
 use fnv::FnvHasher;
 use std::collections::{HashMap as StdHashMap, HashSet as StdHashSet};
 use std::hash::BuildHasherDefault;
+use cgmath::Zero;
 
 pub type Vec3f = cgmath::Vector3<f32>;
 
@@ -38,32 +39,102 @@ pub struct SoundEvent {
     pub loop_sound: bool,
 }
 
-pub type Listener = self::context::Listener;
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct Listener {
+    pub position: Vec3f,
+    pub velocity: Vec3f,
+    pub orientation_up: Vec3f,
+    pub orientation_forward: Vec3f,
+}
 
-pub type HowlResult<T> = errors::Result<T>;
-pub type HowlError = errors::Error;
-
-#[macro_use]
-extern crate error_chain;
-
-mod errors {
-    // Create the Error, ErrorKind, ResultExt, and Result types
-    error_chain! {
-        errors {
-            NoFreeStaticSource
-            NoFreeStreamingSource
-            TooManyChannels
-            FileDoesntExist(path: ::std::path::PathBuf)
-            LoadError(path: ::std::path::PathBuf )
-        }
-
-        foreign_links {
-            IO(::std::io::Error);
-            Vorbis(::lewton::VorbisError);
-            Alto(::alto::AltoError);
+impl Listener {
+    pub fn default() -> Listener {
+        Listener {
+            position: Vec3f::zero(),
+            velocity: Vec3f::zero(),
+            orientation_up: Vec3f::new(0.0, 1.0, 0.0),
+            orientation_forward: Vec3f::new(0.0, 0.0, -1.0),
         }
     }
 }
+
+pub type LoadResult<T> = Result<T, errors::LoadError>;
+pub type PreloadResult<T> = Result<T, errors::PreloadError>;
+pub type SoundEventResult<T> = Result<T, errors::SoundEventError>;
+pub type SoundProviderResult<T> = Result<T, alto::AltoError>;
+pub type WorkerResult<T> = Result<T, alto::AltoError>;
+
+pub mod errors {
+    use alto;
+    use std::path::PathBuf;
+    use lewton;
+    use std::io;
+
+    #[derive(Debug)]
+    pub enum PreloadError {
+        LoadError(LoadError),
+        SoundProviderError(alto::AltoError), // this is a dupe at this point ... hrm
+    }
+
+    impl From<LoadError> for PreloadError {
+        fn from(val: LoadError) -> PreloadError {
+            PreloadError::LoadError(val)
+        }
+    }
+
+    impl From<alto::AltoError> for PreloadError {
+        fn from(val: alto::AltoError) -> PreloadError {
+            PreloadError::SoundProviderError(val)
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct LoadError {
+        pub path: PathBuf,
+        pub reason: LoadErrorReason,
+    }
+
+    #[derive(Debug)]
+    pub enum LoadErrorReason {
+        FileDoesntExist,
+        FileReadError(io::Error),
+        ReadOggError(lewton::VorbisError),
+        TooManyChannels,
+    }
+
+    #[derive(Debug)]
+    pub enum SoundEventError {
+        LoadSoundError(LoadError), // recoverable
+        SoundProviderError(alto::AltoError),
+        NoFreeStaticSource,
+        NoFreeStreamingSource,
+    }
+
+    impl From<LoadError> for SoundEventError {
+        fn from(val: LoadError) -> SoundEventError {
+            SoundEventError::LoadSoundError(val)
+        }
+    }
+
+    impl From<alto::AltoError> for SoundEventError {
+        fn from(val: alto::AltoError) -> SoundEventError {
+            SoundEventError::SoundProviderError(val)
+        }
+    }
+
+    impl From<PreloadError> for SoundEventError {
+        fn from(val: PreloadError) -> SoundEventError {
+            use self::SoundEventError::*;
+            match val {
+                PreloadError::LoadError(le) => LoadSoundError(le),
+                PreloadError::SoundProviderError(ae) => SoundProviderError(ae), 
+            }
+        }
+    }
+}
+
+// - OpenALError (unrecoverable)
+// - SoundEventError (Load | OpenAL | NoFreeStreamingSource | NoFreeStaticSource)
 
 pub type HashMap<K, V> = StdHashMap<K, V, BuildHasherDefault<FnvHasher>>;
 pub type HashSet<V> = StdHashSet<V, BuildHasherDefault<FnvHasher>>;
