@@ -135,7 +135,7 @@ impl <'d> Sources<'d> {
                 match state {
                     Initial | Playing | Paused => (),
                     Stopped => {
-                        source.current_binding = None;
+                        source.clean()?;
                         available_streaming_sources += 1;   
                     },
                 };
