@@ -28,11 +28,11 @@ impl SoundWorker {
     }
 
     pub fn shutdown_and_wait(self) {
-        println!("sending stop");
+        // println!("sending stop");
         self.send(SoundEngineUpdate::Stop).unwrap();
-        println!("joining");
+        // println!("joining");
         self.join_handle.join().unwrap();
-        println!("thread joined");
+        // println!("thread joined");
     }
 
     pub fn create(open_al_path: String, resources_path:String, extension:String, streaming_threshold: u64, streaming_buffer_duration: f32) -> SoundWorker {
@@ -53,7 +53,7 @@ impl SoundWorker {
             loop {
                 match rx.recv() {
                     Ok(event) => {
-                        println!("worker receiving event {:?}", event);
+                        // println!("worker receiving event {:?}", event);
  						
  						let mut purge = false;
  						'fs: loop {
@@ -79,7 +79,7 @@ impl SoundWorker {
                         match engine.process(&mut cb, event) {
                             Ok(true) => (),
                             Ok(false) => {
-                                println!("Sound engine shutting down");
+                                // println!("Sound engine shutting down");
                                 break;
                             },
                             Err(err) => {
