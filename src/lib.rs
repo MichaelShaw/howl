@@ -6,15 +6,12 @@ pub mod worker;
 
 extern crate cgmath;
 extern crate alto;
-extern crate ogg;
+// extern crate ogg;
 extern crate lewton;
-extern crate fnv;
 extern crate time;
 extern crate notify;
+extern crate aphid;
 
-use fnv::FnvHasher;
-use std::collections::{HashMap as StdHashMap, HashSet as StdHashSet};
-use std::hash::BuildHasherDefault;
 use cgmath::Zero;
 
 pub type Vec3f = cgmath::Vector3<f32>;
@@ -135,24 +132,3 @@ pub mod errors {
 
 // - OpenALError (unrecoverable)
 // - SoundEventError (Load | OpenAL | NoFreeStreamingSource | NoFreeStaticSource)
-
-pub type HashMap<K, V> = StdHashMap<K, V, BuildHasherDefault<FnvHasher>>;
-pub type HashSet<V> = StdHashSet<V, BuildHasherDefault<FnvHasher>>;
-
-#[macro_export]
-macro_rules! hashset {
-    ($($val: expr ),*) => {{
-         let mut set = HashSet::default();
-         $( set.insert( $val); )*
-         set
-    }}
-}
-
-#[macro_export]
-macro_rules! hashmap {
-    ($( $key: expr => $val: expr ),*) => {{
-         let mut map = HashMap::default();
-         $( map.insert($key, $val); )*
-         map
-    }}
-}

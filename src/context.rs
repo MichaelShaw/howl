@@ -8,10 +8,12 @@ use std::path::{PathBuf};
 use super::load::{load_combined, LoadedSound, load_ogg};
 use super::source::{Sources, SoundSource, StreamingSoundSource, SoundSourceLoan};
 
-use {HashMap, Gain, DistanceModel, SoundName, SoundEvent};
+use {Gain, DistanceModel, SoundName, SoundEvent};
 use {SoundProviderResult, PreloadResult, SoundEventResult};
 use super::errors::*;
 use super::Listener;
+
+use aphid::HashMap;
 
 
 pub struct SoundContext<'d> {

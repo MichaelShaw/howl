@@ -1,9 +1,10 @@
 use time;
 
-use {Listener, DistanceModel, SoundEvent, Gain, SoundName, HashMap, SoundProviderResult};
+use {Listener, DistanceModel, SoundEvent, Gain, SoundName, SoundProviderResult};
 use super::context::{SoundContext};
 use super::source::SoundSourceLoan;
 use super::errors::*;
+use aphid::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum SoundEngineUpdate {

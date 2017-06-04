@@ -4,8 +4,6 @@ use std::fs;
 use std::fs::File;
 use std::path::{Path};
 
-use ogg;
-
 use super::LoadResult;
 use super::errors::*;
 
@@ -23,6 +21,7 @@ impl Sound {
     }
 }
 
+
 pub enum LoadedSound {
     Static(Sound),
     Streaming(OggStreamReader<File>),
@@ -37,8 +36,9 @@ fn open_file(path:&Path) -> LoadResult<File> {
    File::open(path).map_err(|ioe| LoadError { path: path.to_path_buf(), reason: LoadErrorReason::FileReadError(ioe) }) 
 }
 
-fn open_stream_reader(path: &Path, packet_reader: ogg::PacketReader<File>) -> LoadResult<OggStreamReader<File>> {
-    OggStreamReader::new(packet_reader).map_err(|oe| LoadError { path: path.to_path_buf(), reason: LoadErrorReason::ReadOggError(oe) })
+// fn open_stream_reader(path: &Path, packet_reader: ogg::PacketReader<File>) -> LoadResult<OggStreamReader<File>> {
+fn open_stream_reader(path: &Path, file: File) -> LoadResult<OggStreamReader<File>> {
+    OggStreamReader::new(file).map_err(|oe| LoadError { path: path.to_path_buf(), reason: LoadErrorReason::ReadOggError(oe) })
 }
 
 pub fn load_combined(path: &Path, streaming_size: u64) -> LoadResult<LoadedSound> {
@@ -53,17 +53,16 @@ pub fn load_combined(path: &Path, streaming_size: u64) -> LoadResult<LoadedSound
 }
 
 pub fn load_ogg_stream(path: &Path) -> LoadResult<OggStreamReader<File>> {
-    let f = open_file(path)?; 
-    let packet_reader = ogg::PacketReader::new(f);
-	let srr = open_stream_reader(path, packet_reader)?;
+    let file = open_file(path)?; 
+	let srr = open_stream_reader(path, file)?;
     Ok(srr)
 }
 
 pub fn load_ogg(path: &Path) -> LoadResult<Sound> {
-    let f = open_file(path)?;
+    let file = open_file(path)?;
 
-    let packet_reader = ogg::PacketReader::new(f);
-	let mut srr = open_stream_reader(path, packet_reader)?;
+    // let packet_reader = ogg::PacketReader::new(f);
+	let mut srr = open_stream_reader(path, file)?;
     
     if srr.ident_hdr.audio_channels > 2 {
         return Err(LoadError{ path: path.to_path_buf(), reason: LoadErrorReason::TooManyChannels });

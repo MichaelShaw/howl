@@ -1,15 +1,20 @@
 #![allow(dead_code)]
 
-#[macro_use]
 extern crate howl;
 
 extern crate alto;
 extern crate cgmath;
 
-use howl::{Listener, SoundEvent, Vec3f, HashMap};
+#[macro_use]
+extern crate aphid;
+
+use aphid::HashMap;
+
+use howl::{Listener, SoundEvent, Vec3f};
 use howl::worker::SoundWorker;
 use howl::engine::SoundEngineUpdate::*;
 use cgmath::Zero;
+
 
 #[cfg(target_os = "windows")] 
 const OPENAL_PATH: &'static str = "./native/windows/OpenAL64.dll";

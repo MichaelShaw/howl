@@ -4,13 +4,13 @@ version = "0.1.0"
 authors = ["Michael Shaw <michaeljshaw@gmail.com>"]
 
 [dependencies]
-lewton = "0.4"
-alto = "1.0"
-ogg = "0.4"
+lewton = "0.5"
+alto = "1.1"
 cgmath = "0.14"
-fnv = "1.0"
 time = "0.1"
 notify = "3.0"
+
+aphid = { git = "https://github.com/michaelshaw/aphid" }
 
 [[example]]
 name = "engine"
