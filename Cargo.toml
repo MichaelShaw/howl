@@ -6,8 +6,8 @@ authors = ["Michael Shaw <michaeljshaw@gmail.com>"]
 [dependencies]
 lewton = "0.4"
 alto = "1.0"
-ogg = "*"
-cgmath = "0.12"
+ogg = "0.4"
+cgmath = "0.14"
 fnv = "1.0"
 time = "0.1"
 notify = "3.0"
