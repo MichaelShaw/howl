@@ -9,6 +9,7 @@ alto = "1.1"
 cgmath = "0.14"
 time = "0.1"
 notify = "3.0"
+rand = "0.3"
 
 aphid = { git = "https://github.com/michaelshaw/aphid" }
 

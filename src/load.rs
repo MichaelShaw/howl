@@ -2,7 +2,7 @@ use lewton::inside_ogg::OggStreamReader;
 
 use std::fs;
 use std::fs::File;
-use std::path::{Path};
+use std::path::{PathBuf, Path};
 
 use super::LoadResult;
 use super::errors::*;
@@ -21,9 +21,8 @@ impl Sound {
     }
 }
 
-
 pub enum LoadedSound {
-    Static(Sound),
+    Static(Vec<Sound>),
     Streaming(OggStreamReader<File>),
 }
 
@@ -41,14 +40,25 @@ fn open_stream_reader(path: &Path, file: File) -> LoadResult<OggStreamReader<Fil
     OggStreamReader::new(file).map_err(|oe| LoadError { path: path.to_path_buf(), reason: LoadErrorReason::ReadOggError(oe) })
 }
 
-pub fn load_combined(path: &Path, streaming_size: u64) -> LoadResult<LoadedSound> {
-    let size = file_size(path)?;
-    if size > streaming_size {
-        let stream = load_ogg_stream(path)?;
-        Ok(LoadedSound::Streaming(stream))
+pub fn load_combined(paths: &[PathBuf], streaming_size: u64) -> LoadResult<LoadedSound> {
+    if paths.len() == 1 { // if there's only one .... detect if we should stream it or not
+        let path = &paths[0];
+        let size = file_size(path)?;
+        if size > streaming_size {
+            let stream = load_ogg_stream(path)?;
+            Ok(LoadedSound::Streaming(stream))
+        } else {
+            let sound = load_ogg(path)?;
+            Ok(LoadedSound::Static(vec![sound]))
+        }
     } else {
-        let sound = load_ogg(path)?;
-        Ok(LoadedSound::Static(sound))
+        // we just gonna load them all
+        let mut loaded_sounds = Vec::new();
+        for path in paths {
+            let sound = load_ogg(path)?;
+            loaded_sounds.push(sound);
+        }
+        Ok(LoadedSound::Static(loaded_sounds))
     }
 }
 
@@ -61,7 +71,6 @@ pub fn load_ogg_stream(path: &Path) -> LoadResult<OggStreamReader<File>> {
 pub fn load_ogg(path: &Path) -> LoadResult<Sound> {
     let file = open_file(path)?;
 
-    // let packet_reader = ogg::PacketReader::new(f);
 	let mut srr = open_stream_reader(path, file)?;
     
     if srr.ident_hdr.audio_channels > 2 {

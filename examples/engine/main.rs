@@ -5,6 +5,8 @@ extern crate howl;
 extern crate alto;
 extern crate cgmath;
 
+extern crate rand;
+
 #[macro_use]
 extern crate aphid;
 
@@ -22,7 +24,8 @@ const OPENAL_PATH: &'static str = "./native/windows/OpenAL64.dll";
 const OPENAL_PATH: &'static str = "./native/mac/openal.dylib";
 
 fn main() {
-    let worker = SoundWorker::create(OPENAL_PATH.into(), "examples/engine/resources".into(), "ogg".into(), 1_000_000, 5.0);
+    let rand = rand::XorShiftRng::new_unseeded();
+    let worker = SoundWorker::create(OPENAL_PATH.into(), "examples/engine/resources".into(), "ogg".into(), rand, 1_000_000, 5.0);
 
     let listener = Listener::default();
 
@@ -49,12 +52,12 @@ fn main() {
 
     std::thread::sleep(std::time::Duration::new(3, 0));
 
-    worker.send(Render { master_gain: 1.0, sounds:vec![sound_event.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
+    worker.send(Render { master_gain: 1.0, sounds:vec![sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
 
     for _ in 0..10 {
-        std::thread::sleep(std::time::Duration::new(3, 0));
+        std::thread::sleep(std::time::Duration::new(2, 0));
 
-        worker.send(Render { master_gain: 1.0, sounds:vec![sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();    
+        worker.send(Render { master_gain: 1.0, sounds:vec![sound_event.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
     }
 
     std::thread::sleep(std::time::Duration::new(3, 0));    

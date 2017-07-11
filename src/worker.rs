@@ -8,15 +8,11 @@ use std::sync::mpsc::SendError;
 use alto::Alto;
 use notify::{RecommendedWatcher, Watcher, RecursiveMode, RawEvent};
 
+use rand;
+
 use super::engine::{SoundEngineUpdate, SoundEngine};
-    
-    // // , Duration::from_secs(0)
-    
-    
 
 
-
-// 
 pub struct SoundWorker {
     send_channel: Sender<SoundEngineUpdate>,
     join_handle: JoinHandle<()>,
@@ -35,13 +31,14 @@ impl SoundWorker {
         // println!("thread joined");
     }
 
-    pub fn create(open_al_path: String, resources_path:String, extension:String, streaming_threshold: u64, streaming_buffer_duration: f32) -> SoundWorker {
+    pub fn create(open_al_path: String, resources_path:String, extension:String, rng: rand::XorShiftRng, streaming_threshold: u64, streaming_buffer_duration: f32) -> SoundWorker {
         let (tx, rx) = channel::<SoundEngineUpdate>();
         let join_handle = thread::spawn(move || {
             let alto = Alto::load(open_al_path).unwrap();
             let dev = alto.open(None).unwrap();
             let ctx = dev.new_context(None).unwrap();
-            let mut cb = super::context::create_sound_context(&ctx, &resources_path, &extension, streaming_threshold, streaming_buffer_duration);
+
+            let mut cb = super::context::create_sound_context(&ctx, &resources_path, &extension, rng, streaming_threshold, streaming_buffer_duration);
 
             cb.create(32, 4).unwrap();
 

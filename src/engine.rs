@@ -36,9 +36,9 @@ impl SoundEngine {
         use self::SoundEngineUpdate::*;
         let should_continue = match update {
             Preload(sounds) => {
-                for &(ref sound_name, gain) in &sounds {
-                    match context.load_sound(sound_name, gain) {
-                        Ok(_) => (),
+                for (sound_name, gain) in sounds {
+                    match context.preload(&sound_name, gain) {
+                        Ok(buffers) => (),
                         Err(err) => {
                             println!("Sound Worker failed to preload {:?} err -> {:?}", sound_name, err);
                             ()
@@ -82,7 +82,6 @@ impl SoundEngine {
                         Err(SoundEventError::SoundProviderError(sp)) => return Err(sp),
                         Err(err) => println!("Sound Worker had problem playing sound_event {:?} err -> {:?}", sound_event, err),
                     }
-                    
                 }
 
                 true  

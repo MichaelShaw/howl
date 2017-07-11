@@ -11,6 +11,7 @@ extern crate lewton;
 extern crate time;
 extern crate notify;
 extern crate aphid;
+extern crate rand;
 
 use cgmath::Zero;
 
@@ -61,6 +62,22 @@ pub type SoundEventResult<T> = Result<T, errors::SoundEventError>;
 pub type SoundProviderResult<T> = Result<T, alto::AltoError>;
 pub type WorkerResult<T> = Result<T, alto::AltoError>;
 
+use std::fs;
+use std::path::{PathBuf, Path};
+
+pub fn read_directory_paths(path:&Path) -> PreloadResult<Vec<PathBuf>> {
+    use errors::{LoadError, LoadErrorReason};
+    let mut paths : Vec<PathBuf> = Vec::new();
+
+    for entry in try!(fs::read_dir(path).map_err(|io| LoadError {path: path.to_path_buf(), reason: LoadErrorReason::FileReadError(io) })) {
+        let entry = try!(entry.map_err(|io| LoadError {path: path.to_path_buf(), reason: LoadErrorReason::FileReadError(io) }));
+        let file_path = entry.path().to_path_buf();
+        paths.push(file_path);
+    }
+
+    Ok(paths)
+}
+
 pub mod errors {
     use alto;
     use std::path::PathBuf;
@@ -105,6 +122,7 @@ pub mod errors {
         SoundProviderError(alto::AltoError),
         NoFreeStaticSource,
         NoFreeStreamingSource,
+        NoSounds,
     }
 
     impl From<LoadError> for SoundEventError {
