@@ -7,10 +7,18 @@ use super::errors::*;
 use aphid::HashMap;
 
 #[derive(Debug, Clone)]
+pub struct SoundRender {
+    pub master_gain: f32, 
+    pub sounds:Vec<SoundEvent>, 
+    pub persistent_sounds:HashMap<String, SoundEvent>, 
+    pub listener: Listener
+}
+
+#[derive(Debug, Clone)]
 pub enum SoundEngineUpdate {
     Preload(Vec<(SoundName, Gain)>), // load buffers
     DistanceModel(DistanceModel),
-    Render { master_gain: f32, sounds:Vec<SoundEvent>, persistent_sounds:HashMap<String, SoundEvent>, listener: Listener },
+    Render(SoundRender),
     Clear, // unbind all sources, destroy all buffers,
     Stop,
 }
@@ -51,21 +59,22 @@ impl SoundEngine {
                 context.set_distace_model(model)?;
                 true
             },
-            Render { master_gain, sounds, persistent_sounds, listener } => {
+            Render(render) => {
+                // { master_gain, sounds, persistent_sounds, listener }
                 try!(context.sources.check_bindings());
                 match context.ensure_buffers_queued() {
                     Ok(_) => (),
                     Err(PreloadError::LoadError(le)) => println!("Sound worker received load error while ensuring buffers are queued {:?}", le),
                     Err(PreloadError::SoundProviderError(sp)) => return Err(sp), 
                 }
-                if context.master_gain != master_gain {
-                    try!(context.set_gain(master_gain));
+                if context.master_gain != render.master_gain {
+                    try!(context.set_gain(render.master_gain));
                 }
-                if context.listener != listener {
-                    try!(context.set_listener(listener));
+                if context.listener != render.listener {
+                    try!(context.set_listener(render.listener));
                 }
 
-                for sound_event in sounds {
+                for sound_event in render.sounds {
                     match context.play_event(sound_event.clone(), None) {
                         Ok(_) => (),
                         Err(SoundEventError::SoundProviderError(sp)) => return Err(sp),
@@ -73,7 +82,8 @@ impl SoundEngine {
                     }
                 }
                 
-                for (name, sound_event) in persistent_sounds {
+                
+                for (name, sound_event) in render.persistent_sounds {
                     let old_loan = self.loans.remove(&name);
                     match context.play_event(sound_event.clone(), old_loan) {
                         Ok(new_loan) => {

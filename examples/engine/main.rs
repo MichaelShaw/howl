@@ -15,6 +15,7 @@ use aphid::HashMap;
 use howl::{Listener, SoundEvent, Vec3f};
 use howl::worker::SoundWorker;
 use howl::engine::SoundEngineUpdate::*;
+use howl::engine::SoundRender;
 use cgmath::Zero;
 
 
@@ -48,16 +49,16 @@ fn main() {
 
     worker.send(Preload(vec![("teleport".into(), 1.0), ("water".into(), 1.0)])).unwrap();
 
-    worker.send(Render { master_gain: 1.0, sounds:vec![sound_event.clone(), sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(1.0)], listener: listener }).unwrap();
+    worker.send(Render(SoundRender { master_gain: 1.0, sounds:vec![sound_event.clone(), sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(1.0)], listener: listener })).unwrap();
 
     std::thread::sleep(std::time::Duration::new(3, 0));
 
-    worker.send(Render { master_gain: 1.0, sounds:vec![sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
+    worker.send(Render(SoundRender { master_gain: 1.0, sounds:vec![sound_event_b.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener })).unwrap();
 
     for _ in 0..10 {
         std::thread::sleep(std::time::Duration::new(2, 0));
 
-        worker.send(Render { master_gain: 1.0, sounds:vec![sound_event.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener }).unwrap();
+        worker.send(Render(SoundRender { master_gain: 1.0, sounds:vec![sound_event.clone()], persistent_sounds: hashmap!["music".into() => find_me_sound(0.3)], listener: listener })).unwrap();
     }
 
     std::thread::sleep(std::time::Duration::new(3, 0));    

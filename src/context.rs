@@ -5,7 +5,7 @@ use alto::{Mono, Stereo};
 use std::sync::Arc;
 use std::path::{PathBuf};
 
-use super::load::{load_combined, LoadedSound, load_ogg, Sound};
+use super::load::{load_combined, load_ogg, LoadedSound, Sound};
 use super::source::{Sources, SoundSource, StreamingSoundSource, SoundSourceLoan};
 
 use {Gain, DistanceModel, SoundName, SoundEvent};
@@ -134,9 +134,19 @@ impl<'d> SoundContext<'d> {
         }
     }
 
-    pub fn preload(&self, sound_name: &str, gain:Gain) -> PreloadResult<()> {
-        let paths = self.full_sound_paths(sound_name);
-//        context.buffers.insert(sound_name, buffers);
+    pub fn preload(&mut self, sound_name: &str, gain:Gain) -> PreloadResult<()> {
+        let paths = self.full_sound_paths(sound_name)?;
+
+        let mut buffers = Vec::new();
+
+        for path in paths {
+            let sound = load_ogg(&path)?;
+            let buffer = self.buffer_sound(sound, gain)?;
+            buffers.push(buffer);
+        }
+
+        self.buffers.insert(sound_name.to_string(), buffers);
+
         Ok(())
     }
 
