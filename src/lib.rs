@@ -4,7 +4,6 @@ pub mod context;
 pub mod source;
 pub mod worker;
 
-extern crate cgmath;
 extern crate alto;
 // extern crate ogg;
 extern crate lewton;
@@ -13,9 +12,9 @@ extern crate notify;
 extern crate aphid;
 extern crate rand;
 
-use cgmath::Zero;
+pub type Vec3 = [f32; 3];
 
-pub type Vec3f = cgmath::Vector3<f32>;
+pub const VEC3_ZERO : Vec3 = [0.0, 0.0, 0.0];
 
 // blend speed for persistent sounds, in, out?
 
@@ -30,7 +29,7 @@ pub type DistanceModel = alto::DistanceModel;
 #[derive(Clone, Debug)]
 pub struct SoundEvent {
     pub name: String,
-    pub position: Vec3f,
+    pub position: Vec3,
     pub gain: f32,
     pub pitch: f32,
     pub attenuation: f32, // unsure if this should be bool for relative, or an optional rolloff factor (within the context distance model)
@@ -39,19 +38,19 @@ pub struct SoundEvent {
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Listener {
-    pub position: Vec3f,
-    pub velocity: Vec3f,
-    pub orientation_up: Vec3f,
-    pub orientation_forward: Vec3f,
+    pub position: Vec3,
+    pub velocity: Vec3,
+    pub orientation_up: Vec3,
+    pub orientation_forward: Vec3,
 }
 
 impl Listener {
     pub fn default() -> Listener {
         Listener {
-            position: Vec3f::zero(),
-            velocity: Vec3f::zero(),
-            orientation_up: Vec3f::new(0.0, 1.0, 0.0),
-            orientation_forward: Vec3f::new(0.0, 0.0, -1.0),
+            position: VEC3_ZERO,
+            velocity: VEC3_ZERO,
+            orientation_up: [0.0, 1.0, 0.0],
+            orientation_forward: [0.0, 0.0, -1.0],
         }
     }
 }

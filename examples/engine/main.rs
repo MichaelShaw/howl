@@ -3,7 +3,6 @@
 extern crate howl;
 
 extern crate alto;
-extern crate cgmath;
 
 extern crate rand;
 
@@ -12,11 +11,11 @@ extern crate aphid;
 
 use aphid::HashMap;
 
-use howl::{Listener, SoundEvent, Vec3f};
+use howl::{Listener, SoundEvent, Vec3, VEC3_ZERO};
 use howl::worker::SoundWorker;
 use howl::engine::SoundEngineUpdate::*;
 use howl::engine::SoundRender;
-use cgmath::Zero;
+
 
 
 #[cfg(target_os = "windows")] 
@@ -32,7 +31,7 @@ fn main() {
 
     let sound_event = SoundEvent {
         name: "teleport".into(),
-        position: Vec3f::zero(),
+        position: VEC3_ZERO,
         gain: 1.0,
         pitch: 1.5,
         attenuation:1.0,
@@ -40,7 +39,7 @@ fn main() {
     };
     let sound_event_b = SoundEvent {
         name: "water".into(),
-        position: Vec3f::zero(),
+        position: VEC3_ZERO,
         gain: 1.0,
         pitch: 1.0,
         attenuation:1.0,
@@ -69,7 +68,7 @@ fn main() {
 fn find_me_sound(gain:f32) -> SoundEvent {
     SoundEvent {
         name: "come.and.find.me".into(),
-        position: Vec3f::zero(),
+        position: VEC3_ZERO,
         gain: gain,
         pitch: 1.0,
         attenuation:1.0,
